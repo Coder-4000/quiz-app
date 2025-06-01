@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ultimate Quiz App</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      max-width: 480px;
+      margin: 20px auto;
+      padding: 10px;
+      background: #f0f4f8;
+      color: #333;
+    }
+    h1 {
+      text-align: center;
+      color: #0077cc;
+    }
+    #category-select {
+      width: 100%;
+      padding: 10px;
+      font-size: 16px;
+      margin-bottom: 15px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+    }
+    #quiz-container {
+      background: white;
+      padding: 15px 20px;
+      border-radius: 8px;
+      box-shadow: 0 3px 6px rgba(0,0,0,0.1);
+    }
+    .question {
+      font-weight: 600;
+      font-size: 1.1em;
+      margin-bottom: 10px;
+    }
+    .options {
+      list-style: none;
+      padding: 0;
+      margin-bottom: 20px;
+    }
+    .options li {
+      margin: 8px 0;
+    }
+    label {
+      cursor: pointer;
+    }
+    button {
+      background-color: #0077cc;
+      border: none;
+      color: white;
+      padding: 10px 15px;
+      border-radius: 6px;
+      font-size: 1em;
+      cursor: pointer;
+      width: 100%;
+    }
+    button:disabled {
+      background-color: #aaa;
+      cursor: not-allowed;
+    }
+    #timer {
+      font-size: 1.1em;
+      font-weight: bold;
+      color: #d33;
+      text-align: right;
+      margin-bottom: 10px;
+    }
+    #result {
+      margin-top: 20px;
+      font-size: 1.3em;
+      font-weight: 700;
+      color: #007700;
+      text-align: center;
+    }
+    #leaderboard {
+      margin-top: 30px;
+      padding: 10px;
+      background: #e7f0ff;
+      border-radius: 8px;
+    }
+    #leaderboard h2 {
+      text-align: center;
+      color: #004a99;
+    }
+    #leaderboard ol {
+      padding-left: 20px;
+    }
+    @media (max-width: 500px) {
+      body {
+        margin: 10px;
+        padding: 5px;
+      }
+      #quiz-container {
+        padding: 15px 10px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Ultimate Quiz App</h1>
+
+  <select id="category-select">
+    <option value="">-- Select a Category --</option>
+    <option value="general">General Knowledge</option>
+    <option value="math">Math</option>
+    <option value="science">Science</option>
+  </select>
+
+  <div id="timer"></div>
+  <div id="quiz-container"></div>
+  <button id="submit-btn" disabled>Submit Answer</button>
+  <div id="result"></div>
+
+  <div id="leaderboard" style="display:none;">
+    <h2>Leaderboard</h2>
+    <ol id="leaderboard-list"></ol>
+  </div>
+
+  <script>
+    // Quiz data by category
+    const quizData = {
+      general: [
+        {
+          question: "What is the capital of France?",
+          options: ["Paris", "London", "Berlin", "Madrid"],
+          answer: "Paris"
+        },
+        {
+          question: "Which language is primarily spoken in Brazil?",
+          options: ["Portuguese", "Spanish", "English", "French"],
+          answer: "Portuguese"
+        },
+        {
+          question: "Who painted the Mona Lisa?",
+          options: ["Vincent Van Gogh", "Leonardo da Vinci", "Pablo Picasso", "Claude Monet"],
+          answer: "Leonardo da Vinci"
+        }
+      ],
+      math: [
+        {
+          question: "What is 5 + 7?",
+          options: ["10", "11", "12", "13"],
+          answer: "12"
+        },
+        {
+          question: "What is the square root of 144?",
+          options: ["10", "11", "12", "14"],
+          answer: "12"
+        },
+        {
+          question: "What is 15% of 200?",
+          options: ["25", "30", "35", "40"],
+          answer: "30"
+        }
+      ],
+      science: [
+        {
+          question: "Which planet is known as the Red Planet?",
+          options: ["Earth", "Mars", "Jupiter", "Saturn"],
+          answer: "Mars"
+        },
+        {
+          question: "Water boils at what temperature (Celsius)?",
+          options: ["90°C", "100°C", "110°C", "120°C"],
+          answer: "100°C"
+        },
+        {
+          question: "What gas do plants absorb from the air?",
+          options: ["Oxygen", "Nitrogen", "Carbon Dioxide", "Hydrogen"],
+          answer: "Carbon Dioxide"
+        }
+      ]
+    };
+
+    // Variables
+    let currentCategory = '';
+    let currentQuestionIndex = 0;
+    let score = 0;
+    let timerInterval;
+    let timeLeft = 15; // seconds per question
+
+    // DOM elements
+    const categorySelect = document.getElementById('category-select');
+    const quizContainer = document.getElementById('quiz-container');
+    const submitBtn = document.getElementById('submit-btn');
+    const resultDiv = document.getElementById('result');
+    const timerDiv = document.getElementById('timer');
+    const leaderboardDiv = document.getElementById('leaderboard');
+    const leaderboardList = document.getElementById('leaderboard-list');
+
+    // Leaderboard data (localStorage)
+    let leaderboard = JSON.parse(localStorage.getItem('quizLeaderboard')) || [];
+
+    // Load leaderboard on start
+    function showLeaderboard() {
+      if (leaderboard.length === 0) {
+        leaderboardList.innerHTML = '<li>No scores yet. Play to get on the leaderboard!</li>';
+      } else {
+        leaderboardList.innerHTML = '';
+        leaderboard.forEach(item => {
+          const li = document.createElement('li');
+          li.textContent = `${item.name} — ${item.score} / ${item.total}`;
+          leaderboardList.appendChild(li);
+        });
+      }
+      leaderboardDiv.style.display = 'block';
+    }
+
+    showLeaderboard();
+
+    // Load quiz questions for chosen category
+    function loadQuestion() {
+      if (!currentCategory) return;
+      const questions = quizData[currentCategory];
+
+      if (currentQuestionIndex >= questions.length) {
+        endQuiz();
+        return;
+      }
+
+      // Reset submit button
+      submitBtn.disabled = true;
+
+      // Reset timer
+      timeLeft = 15;
+      timerDiv.textContent = `Time left: ${timeLeft}s`;
+      clearInterval(timerInterval);
+      timerInterval = setInterval(() => {
+        timeLeft--;
+        timerDiv.textContent = `Time left: ${timeLeft}s`;
+        if (timeLeft === 0) {
+          clearInterval(timerInterval);
+          // Auto submit when timer ends
+          submitAnswer();
+        }
+      }, 1000);
+
+      const currentQ = questions[currentQuestionIndex];
+      quizContainer.innerHTML = `<div class="question">${currentQuestionIndex + 1}. ${currentQ.question}</div>`;
+
+      const optionsList = document.createElement('ul');
+      optionsList.classList.add('options');
+
+      currentQ.options.forEach(option => {
+        const optionItem = document.createElement('li');
+        optionItem.innerHTML = `<label>
+          <input type="radio" name="answer" value="${option}">
+          ${option}
+        </label>`;
+        optionsList.appendChild(optionItem);
+      });
+
+      quizContainer.appendChild(optionsList);
+
+      // Add event listener to enable submit button when user picks an option
+      optionsList.querySelectorAll('input[name="answer"]').forEach(input => {
+        input.addEventListener('change', () => {
+          submitBtn.disabled = false;
+        });
+      });
+    }
+
+    // Submit answer and update score
+    function submitAnswer() {
+      clearInterval(timerInterval);
+      const selectedOption = document.querySelector('input[name="answer"]:checked');
+
+      const questions = quizData[currentCategory];
+      const currentQ = questions[currentQuestionIndex];
+
+      if (selectedOption && selectedOption.value === currentQ.answer) {
+        score++;
+      }
+
+      currentQuestionIndex++;
+      if (currentQuestionIndex < questions.length) {
+        loadQuestion();
+      } else {
+        endQuiz();
+      }
+    }
+
+    // End of quiz - show results and leaderboard input
+    function endQuiz() {
+      quizContainer.innerHTML = '';
+      submitBtn.style.display = 'none';
+      timerDiv.textContent = '';
+      resultDiv.innerHTML = `<p>You scored <strong>${score}</strong> out of <strong>${quizData[currentCategory].length}</strong>.</p>`;
+
+      // Ask for name to save leaderboard
+      const nameInput = document.createElement('input');
+      nameInput.type = 'text';
+      nameInput.placeholder = 'Enter your name to save score';
+      nameInput.style.width = '100%';
+      nameInput.style.padding = '8px';
+      nameInput.style.marginTop = '10px';
+      resultDiv.appendChild(nameInput);
+
+      const saveBtn = document.createElement('button');
+      saveBtn.textContent = 'Save Score';
+      saveBtn.style.marginTop = '10px';
+      resultDiv.appendChild(saveBtn);
+
+      saveBtn.addEventListener('click', () => {
+        const name = nameInput.value.trim();
+        if (name === '') {
+          alert('Please enter your name.');
+          return;
+        }
+        leaderboard.push({
+          name,
+          score,
+          total: quizData[currentCategory].length
+        });
+        leaderboard.sort((a,b) => b.score - a.score);
+        leaderboard = leaderboard.slice(0, 10); // Keep top 10
+        localStorage.setItem('quizLeaderboard', JSON.stringify(leaderboard));
+        showLeaderboard();
+        resultDiv.innerHTML = '<p>Score saved! Refresh the page to play again.</p>';
+      });
+    }
+
+    // Event listeners
+    submitBtn.addEventListener('click', submitAnswer);
+    categorySelect.addEventListener('change', () => {
+      currentCategory = categorySelect.value;
+      currentQuestionIndex = 0;
+      score = 0;
+      submitBtn.style.display = 'inline-block';
+      resultDiv.innerHTML = '';
+      leaderboardDiv.style.display = 'none';
+      if (currentCategory) {
+        loadQuestion();
+      } else {
+        quizContainer.innerHTML = '';
+        submitBtn.disabled = true;
+        timerDiv.textContent = '';
+      }
+    });
+  </script>
+</body>
+</html>
